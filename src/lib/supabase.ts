@@ -125,6 +125,42 @@ export async function updateUserStatus(userId: string, status: 'pending' | 'acti
 }
 
 export async function createGroupIfNeeded(userId: string) {
+  // Fetch user to check status
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('status')
+    .eq('id', userId)
+    .single();
+
+  if (userError) {
+    console.error('Error fetching user for group creation:', userError);
+    return false;
+  }
+
+  // Fetch invite to check owner_confirmed
+  const { data: invite, error: inviteError } = await supabase
+    .from('invites')
+    .select('owner_confirmed')
+    .eq('referred_user_id', userId)
+    .single();
+
+  // Add this debug log right after fetching the invite:
+  console.log('Invite fetch result:', invite, inviteError);
+
+  if (inviteError) {
+    console.error('Error fetching invite for group creation:', inviteError);
+    return false;
+  }
+
+  // Debug log
+  console.log('User status:', user.status, 'Owner confirmed:', invite?.owner_confirmed);
+
+  // Only allow group creation if user is active and owner_confirmed is true
+  if (user.status !== 'active' || invite?.owner_confirmed !== true) {
+    console.warn('User must be active and owner_confirmed to create a group.');
+    return false;
+  }
+
   // Check if user already has a group
   const { data: existingGroups, error: groupCheckError } = await supabase
     .from('groups')

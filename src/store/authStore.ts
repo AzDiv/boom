@@ -69,7 +69,40 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // Generate a unique invite code for this new user
       const newUserInviteCode = uuidv4().substring(0, 8).toUpperCase();
-      // Sign up the user in Supabase Auth
+      // --- BUSINESS LOGIC CHECKS BEFORE AUTH SIGNUP ---
+      let groupId = null;
+      let inviterId = null;
+      if (inviteCode) {
+        const { data: group } = await supabase
+          .from('groups')
+          .select('id, owner_id')
+          .eq('code', inviteCode)
+          .single();
+        if (group) {
+          groupId = group.id;
+          inviterId = group.owner_id;
+
+          // Count all users referred by this inviter (owner)
+          const { count: referredCount, error: referredCountError } = await supabase
+            .from('users')
+            .select('id', { count: 'exact', head: true })
+            .eq('referred_by', inviterId);
+
+          if (referredCountError) throw referredCountError;
+
+          // Block sign up if inviter already has 4 referred users (plus owner = 5)
+          if ((referredCount ?? 0) >= 4) {
+            set({ loading: false });
+            return {
+              success: false,
+              error: 'This group is full. Please use another invite code.'
+            };
+          }
+        }
+      }
+      // --- END BUSINESS LOGIC CHECKS ---
+
+      // Now safe to create user in Supabase Auth
       const { data, error } = await supabase.auth.signUp({ 
         email, 
         password,
@@ -82,32 +115,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       if (error) throw error;
       if (data.user) {
-        // Look up group by invite code (group code)
-        let groupId = null;
-        let inviterId = null;
-        if (inviteCode) {
-          const { data: group } = await supabase
-            .from('groups')
-            .select('id, owner_id')
-            .eq('code', inviteCode)
-            .single();
-          if (group) {
-            groupId = group.id;
-            inviterId = group.owner_id;
-
-            // Check group conditions: e.g., max 5 users per group owner
-            const { count, error: countError } = await supabase
-              .from('users')
-              .select('id', { count: 'exact', head: true })
-              .eq('referred_by', inviterId);
-            if (countError) throw countError;
-            const MAX_GROUP_MEMBERS = 5;
-            if (count !== null && count >= MAX_GROUP_MEMBERS) {
-              set({ loading: false });
-              return { success: false, error: 'This group is full. Please use another invite code.' };
-            }
-          }
-        }
         // Create user in our users table
         const { error: insertError } = await supabase.from('users').insert({
           id: data.user.id,
