@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import AuthLayout from '../../components/Layout/AuthLayout';
+import PaymentInstructions from '../../components/UI/PaymentInstructions';
 import toast from 'react-hot-toast';
 
 const Register: React.FC = () => {
@@ -178,6 +179,10 @@ const Register: React.FC = () => {
               placeholder="Enter invite code if you have one"
             />
           </div>
+        </div>
+
+        <div className="mb-6">
+          <PaymentInstructions className="mt-6" />
         </div>
 
         <div>
